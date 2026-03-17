@@ -17,28 +17,88 @@ export default function HomePage({
   const [editingValue, setEditingValue] = useState(currentTask.name || '')
   const intervalRef = useRef(null)
   const taskInputRef = useRef(null)
+  // 使用 ref 存储时间戳，避免锁屏时计时器暂停问题
+  const lastTickRef = useRef(null)
+  const rafRef = useRef(null)
 
+  // 基于时间戳的计时器，解决锁屏/后台暂停问题
   useEffect(() => {
     if (isRunning) {
-      intervalRef.current = setInterval(() => {
-        setTimeLeft((t) => {
-          if (t <= 1) {
-            setIsRunning(false)
-            return 0
-          }
-          return t - 1
-        })
-        setFocusedSeconds((s) => s + 1)
-      }, 1000)
+      lastTickRef.current = Date.now()
+      
+      const tick = () => {
+        const now = Date.now()
+        const elapsed = Math.floor((now - lastTickRef.current) / 1000)
+        
+        if (elapsed >= 1) {
+          lastTickRef.current = now
+          
+          setTimeLeft((t) => {
+            const nextT = Math.max(0, t - elapsed)
+            if (nextT <= 0) {
+              setIsRunning(false)
+            }
+            return nextT
+          })
+          
+          setFocusedSeconds((s) => s + elapsed)
+        }
+        
+        if (isRunning) {
+          rafRef.current = requestAnimationFrame(tick)
+        }
+      }
+      
+      rafRef.current = requestAnimationFrame(tick)
     } else {
-      clearInterval(intervalRef.current)
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current)
+      }
     }
-    return () => clearInterval(intervalRef.current)
+    
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current)
+      }
+    }
+  }, [isRunning])
+
+  // 处理页面可见性变化（锁屏/后台/切换标签）
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && isRunning) {
+        // 页面重新可见时更新时间戳，避免跳变
+        lastTickRef.current = Date.now()
+      }
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [isRunning])
 
   useEffect(() => {
     setCurrentTask((prev) => ({ ...prev, focusedSeconds }))
   }, [focusedSeconds, setCurrentTask])
+
+  // 定期保存专注时长到 localStorage（每10秒），防止页面意外关闭丢失数据
+  useEffect(() => {
+    if (!isRunning) return
+    
+    const saveInterval = setInterval(() => {
+      setCurrentTask((prev) => ({ ...prev, focusedSeconds }))
+    }, 10000)
+    
+    // 页面关闭前保存
+    const handleBeforeUnload = () => {
+      setCurrentTask((prev) => ({ ...prev, focusedSeconds }))
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    
+    return () => {
+      clearInterval(saveInterval)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [isRunning, focusedSeconds, setCurrentTask])
 
   useEffect(() => {
     setEditingValue(currentTask.name || '')
