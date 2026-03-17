@@ -15,63 +15,58 @@ export default function HomePage({
   const [focusedSeconds, setFocusedSeconds] = useState(currentTask.focusedSeconds || 0)
   const [editingTaskName, setEditingTaskName] = useState(false)
   const [editingValue, setEditingValue] = useState(currentTask.name || '')
-  const intervalRef = useRef(null)
   const taskInputRef = useRef(null)
-  // 使用 ref 存储时间戳，避免锁屏时计时器暂停问题
-  const lastTickRef = useRef(null)
-  const rafRef = useRef(null)
+  // 会话开始时间与当时的状态，用真实经过时间计算，锁屏/后台再回来也能正确显示
+  const sessionStartRef = useRef(null)
+  const initialTimeLeftRef = useRef(TOTAL)
+  const initialFocusedSecondsRef = useRef(0)
+  const intervalRef = useRef(null)
 
-  // 基于时间戳的计时器，解决锁屏/后台暂停问题
+  // 从会话开始时间计算当前应有状态（不依赖定时器触发，锁屏期间时间也在走）
+  const computeStateFromSession = () => {
+    const elapsed = (Date.now() - sessionStartRef.current) / 1000
+    const newTimeLeft = Math.max(0, initialTimeLeftRef.current - elapsed)
+    const newFocusedSeconds = initialFocusedSecondsRef.current + elapsed
+    return { newTimeLeft, newFocusedSeconds, elapsed }
+  }
+
+  // 开始/继续专注时：记录会话起点和当时的 timeLeft、focusedSeconds
   useEffect(() => {
     if (isRunning) {
-      lastTickRef.current = Date.now()
-      
-      const tick = () => {
-        const now = Date.now()
-        const elapsed = Math.floor((now - lastTickRef.current) / 1000)
-        
-        if (elapsed >= 1) {
-          lastTickRef.current = now
-          
-          setTimeLeft((t) => {
-            const nextT = Math.max(0, t - elapsed)
-            if (nextT <= 0) {
-              setIsRunning(false)
-            }
-            return nextT
-          })
-          
-          setFocusedSeconds((s) => s + elapsed)
-        }
-        
-        if (isRunning) {
-          rafRef.current = requestAnimationFrame(tick)
-        }
-      }
-      
-      rafRef.current = requestAnimationFrame(tick)
-    } else {
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current)
-      }
-    }
-    
-    return () => {
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current)
-      }
+      sessionStartRef.current = Date.now()
+      initialTimeLeftRef.current = timeLeft
+      initialFocusedSecondsRef.current = focusedSeconds
     }
   }, [isRunning])
 
-  // 处理页面可见性变化（锁屏/后台/切换标签）
+  // 用 setInterval 驱动 UI 更新；实际数值始终由「会话开始时间」计算，不依赖定时器间隔
+  useEffect(() => {
+    if (!isRunning) return
+
+    const tick = () => {
+      const { newTimeLeft, newFocusedSeconds } = computeStateFromSession()
+      setTimeLeft(newTimeLeft)
+      setFocusedSeconds(newFocusedSeconds)
+      if (newTimeLeft <= 0) setIsRunning(false)
+    }
+
+    tick()
+    intervalRef.current = setInterval(tick, 1000)
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [isRunning])
+
+  // 锁屏/切后台再回来：用真实经过时间重算并刷新界面，修复锁屏期间不计时
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (!document.hidden && isRunning) {
-        // 页面重新可见时更新时间戳，避免跳变
-        lastTickRef.current = Date.now()
-      }
+      if (document.hidden || !isRunning) return
+      const { newTimeLeft, newFocusedSeconds } = computeStateFromSession()
+      setTimeLeft(newTimeLeft)
+      setFocusedSeconds(newFocusedSeconds)
+      if (newTimeLeft <= 0) setIsRunning(false)
     }
-    
+
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [isRunning])
