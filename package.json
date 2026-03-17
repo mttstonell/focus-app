@@ -1,0 +1,17 @@
+{
+  "name": "xie_ya_qiong_focus",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Focus 项目根入口，代理 demo 应用命令",
+  "scripts": {
+    "dev": "npm --prefix demo run dev",
+    "build": "npm --prefix demo run build",
+    "preview": "npm --prefix demo run preview",
+    "ios": "npm --prefix demo run ios",
+    "ios:install": "bash demo/ios_install.sh",
+    "lint": "npm --prefix demo run lint",
+    "test": "npm --prefix demo run test",
+    "format": "npm --prefix demo run format",
+    "format:check": "npm --prefix demo run format:check"
+  }
+}

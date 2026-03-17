@@ -1,0 +1,13 @@
+{
+  "appId": "com.focus.app",
+  "appName": "Focus",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "backgroundColor": "#F7F8FA",
+    "preferredContentMode": "mobile"
+  }
+}

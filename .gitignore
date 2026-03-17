@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+
+# Root and nested dependency folders
+**/node_modules/
+
+# Build outputs
+**/dist/
+**/.vite/
+coverage/
+
+# Local env files
+.env
+.env.local
+.env.*.local
+
+# IDE files
+.cursor/
+.vscode/
