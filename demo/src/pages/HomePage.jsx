@@ -8,19 +8,21 @@ export default function HomePage({
   onOpenQuickNote,
   dueCount,
   onTabChange,
+  onPomodoroComplete,
+  focusMinutes = 25,
 }) {
-  const TOTAL = 25 * 60
+  const TOTAL = focusMinutes * 60
   const [timeLeft, setTimeLeft] = useState(TOTAL)
   const [isRunning, setIsRunning] = useState(false)
   const [focusedSeconds, setFocusedSeconds] = useState(currentTask.focusedSeconds || 0)
   const [editingTaskName, setEditingTaskName] = useState(false)
   const [editingValue, setEditingValue] = useState(currentTask.name || '')
   const taskInputRef = useRef(null)
-  // 会话开始时间与当时的状态，用真实经过时间计算，锁屏/后台再回来也能正确显示
   const sessionStartRef = useRef(null)
   const initialTimeLeftRef = useRef(TOTAL)
   const initialFocusedSecondsRef = useRef(0)
   const intervalRef = useRef(null)
+  const pomodoroCompleteFiredRef = useRef(false)
 
   // 从会话开始时间计算当前应有状态（不依赖定时器触发，锁屏期间时间也在走）
   const computeStateFromSession = () => {
@@ -30,12 +32,18 @@ export default function HomePage({
     return { newTimeLeft, newFocusedSeconds, elapsed }
   }
 
-  // 开始/继续专注时：记录会话起点和当时的 timeLeft、focusedSeconds
+  // 学习偏好中修改专注时长且未在计时时，同步剩余时间
+  useEffect(() => {
+    if (!isRunning) setTimeLeft(focusMinutes * 60)
+  }, [focusMinutes, isRunning])
+
+  // 开始/继续专注时：记录会话起点，并重置「完成提醒」触发标记
   useEffect(() => {
     if (isRunning) {
       sessionStartRef.current = Date.now()
       initialTimeLeftRef.current = timeLeft
       initialFocusedSecondsRef.current = focusedSeconds
+      pomodoroCompleteFiredRef.current = false
     }
   }, [isRunning])
 
@@ -47,7 +55,13 @@ export default function HomePage({
       const { newTimeLeft, newFocusedSeconds } = computeStateFromSession()
       setTimeLeft(newTimeLeft)
       setFocusedSeconds(newFocusedSeconds)
-      if (newTimeLeft <= 0) setIsRunning(false)
+      if (newTimeLeft <= 0) {
+        setIsRunning(false)
+        if (!pomodoroCompleteFiredRef.current) {
+          pomodoroCompleteFiredRef.current = true
+          onPomodoroComplete?.()
+        }
+      }
     }
 
     tick()
@@ -64,7 +78,13 @@ export default function HomePage({
       const { newTimeLeft, newFocusedSeconds } = computeStateFromSession()
       setTimeLeft(newTimeLeft)
       setFocusedSeconds(newFocusedSeconds)
-      if (newTimeLeft <= 0) setIsRunning(false)
+      if (newTimeLeft <= 0) {
+        setIsRunning(false)
+        if (!pomodoroCompleteFiredRef.current) {
+          pomodoroCompleteFiredRef.current = true
+          onPomodoroComplete?.()
+        }
+      }
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)

@@ -53,15 +53,50 @@ function normalizeTask(task, fallbackTask) {
   return { name, focusedSeconds }
 }
 
+export const FOCUS_MINUTES_OPTIONS = [15, 25, 30, 45]
+export const BREAK_MINUTES_OPTIONS = [5, 10, 15]
+
+const DEFAULT_PROFILE = {
+  accountName: '专注学习中',
+  reminderDueOn: true,
+  reminderPomodoroOn: true,
+  focusMinutes: 25,
+  breakMinutes: 5,
+}
+
+function clampMinutes(value, options, defaultVal) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < 1) return defaultVal
+  return options.includes(n) ? n : (options.find((m) => m >= n) ?? options[options.length - 1])
+}
+
+function normalizeProfile(raw) {
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_PROFILE }
+  const accountName =
+    typeof raw.accountName === 'string'
+      ? raw.accountName.trim().slice(0, 20)
+      : DEFAULT_PROFILE.accountName
+  return {
+    accountName: accountName || DEFAULT_PROFILE.accountName,
+    reminderDueOn: typeof raw.reminderDueOn === 'boolean' ? raw.reminderDueOn : DEFAULT_PROFILE.reminderDueOn,
+    reminderPomodoroOn:
+      typeof raw.reminderPomodoroOn === 'boolean' ? raw.reminderPomodoroOn : DEFAULT_PROFILE.reminderPomodoroOn,
+    focusMinutes: clampMinutes(raw.focusMinutes, FOCUS_MINUTES_OPTIONS, DEFAULT_PROFILE.focusMinutes),
+    breakMinutes: clampMinutes(raw.breakMinutes, BREAK_MINUTES_OPTIONS, DEFAULT_PROFILE.breakMinutes),
+  }
+}
+
 function migrateState(rawState, defaults) {
   const safeTask = normalizeTask(rawState.currentTask, defaults.defaultTask)
   const rawNotes = Array.isArray(rawState.notes) ? rawState.notes : []
   const migratedNotes = rawNotes.map((note) => normalizeNote(note, safeTask.name)).filter(Boolean)
+  const profile = normalizeProfile(rawState.profile)
 
   return {
     version: SCHEMA_VERSION,
     notes: migratedNotes.length > 0 ? migratedNotes : defaults.defaultNotes,
     currentTask: safeTask,
+    profile,
   }
 }
 
@@ -99,6 +134,7 @@ export function loadAppState(defaults) {
       state: {
         notes: defaults.defaultNotes,
         currentTask: defaults.defaultTask,
+        profile: DEFAULT_PROFILE,
         version: SCHEMA_VERSION,
       },
       source: 'fallback',
@@ -106,12 +142,13 @@ export function loadAppState(defaults) {
   }
 }
 
-export function saveAppState({ notes, currentTask }) {
+export function saveAppState({ notes, currentTask, profile }) {
   try {
     const payload = {
       version: SCHEMA_VERSION,
       notes,
       currentTask,
+      profile: normalizeProfile(profile || DEFAULT_PROFILE),
       updatedAt: new Date().toISOString(),
     }
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
