@@ -22,13 +22,14 @@ export default function HomePage({
   const initialTimeLeftRef = useRef(TOTAL)
   const initialFocusedSecondsRef = useRef(0)
   const intervalRef = useRef(null)
+  const firstTickTimeoutRef = useRef(null)
   const pomodoroCompleteFiredRef = useRef(false)
 
-  // 从会话开始时间计算当前应有状态（不依赖定时器触发，锁屏期间时间也在走）
+  // 从会话开始时间计算当前应有状态（取整，避免界面显示小数）
   const computeStateFromSession = () => {
     const elapsed = (Date.now() - sessionStartRef.current) / 1000
-    const newTimeLeft = Math.max(0, initialTimeLeftRef.current - elapsed)
-    const newFocusedSeconds = initialFocusedSecondsRef.current + elapsed
+    const newTimeLeft = Math.max(0, Math.floor(initialTimeLeftRef.current - elapsed))
+    const newFocusedSeconds = Math.floor(initialFocusedSecondsRef.current + elapsed)
     return { newTimeLeft, newFocusedSeconds, elapsed }
   }
 
@@ -47,7 +48,7 @@ export default function HomePage({
     }
   }, [isRunning])
 
-  // 用 setInterval 驱动 UI 更新；实际数值始终由「会话开始时间」计算，不依赖定时器间隔
+  // 第一秒后再开始逐秒更新，避免「立即 tick + 首次 interval 延迟」导致一下跳两秒
   useEffect(() => {
     if (!isRunning) return
 
@@ -64,9 +65,12 @@ export default function HomePage({
       }
     }
 
-    tick()
-    intervalRef.current = setInterval(tick, 1000)
+    firstTickTimeoutRef.current = setTimeout(() => {
+      tick()
+      intervalRef.current = setInterval(tick, 1000)
+    }, 1000)
     return () => {
+      if (firstTickTimeoutRef.current) clearTimeout(firstTickTimeoutRef.current)
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
   }, [isRunning])
@@ -130,10 +134,11 @@ export default function HomePage({
   }
 
   const fmt = (sec) => {
-    const m = Math.floor(sec / 60)
+    const totalSec = Math.max(0, Math.floor(Number(sec)))
+    const m = Math.floor(totalSec / 60)
       .toString()
       .padStart(2, '0')
-    const s = (sec % 60).toString().padStart(2, '0')
+    const s = (totalSec % 60).toString().padStart(2, '0')
     return `${m}:${s}`
   }
 
