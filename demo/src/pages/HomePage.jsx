@@ -25,12 +25,12 @@ export default function HomePage({
   const firstTickTimeoutRef = useRef(null)
   const pomodoroCompleteFiredRef = useRef(false)
 
-  // 从会话开始时间计算当前应有状态（取整，避免界面显示小数）
+  // 从会话开始时间计算当前应有状态（按已过去整秒数计算，避免首个 tick 多扣 1 秒）
   const computeStateFromSession = () => {
-    const elapsed = (Date.now() - sessionStartRef.current) / 1000
-    const newTimeLeft = Math.max(0, Math.floor(initialTimeLeftRef.current - elapsed))
-    const newFocusedSeconds = Math.floor(initialFocusedSecondsRef.current + elapsed)
-    return { newTimeLeft, newFocusedSeconds, elapsed }
+    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - sessionStartRef.current) / 1000))
+    const newTimeLeft = Math.max(0, initialTimeLeftRef.current - elapsedSeconds)
+    const newFocusedSeconds = initialFocusedSecondsRef.current + elapsedSeconds
+    return { newTimeLeft, newFocusedSeconds, elapsedSeconds }
   }
 
   // 学习偏好中修改专注时长且未在计时时，同步剩余时间

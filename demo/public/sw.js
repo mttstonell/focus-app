@@ -1,18 +1,31 @@
 // Focus App Service Worker
-const CACHE_NAME = 'focus-app-v1'
+const CACHE_NAME = 'focus-app-v2'
 const urlsToCache = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/apple-touch-icon.png',
   '/icon-192.png',
   '/icon-512.png'
 ]
+
+const cacheAssets = async (cache, urls) => {
+  await Promise.all(
+    urls.map(async (url) => {
+      try {
+        await cache.add(url)
+      } catch (error) {
+        console.warn('[SW] Failed to cache asset:', url, error)
+      }
+    })
+  )
+}
 
 // Install event - cache assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache)
+      return cacheAssets(cache, urlsToCache)
     })
   )
   self.skipWaiting()
@@ -34,6 +47,15 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - serve from cache or network
 self.addEventListener('fetch', (event) => {
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(async () => {
+        return (await caches.match('/index.html')) || (await caches.match('/'))
+      })
+    )
+    return
+  }
+
   event.respondWith(
     caches.match(event.request).then((response) => {
       // Return cached version or fetch from network
@@ -49,6 +71,8 @@ self.addEventListener('fetch', (event) => {
           })
         }
         return response
+      }).catch(async () => {
+        return caches.match(event.request)
       })
     })
   )

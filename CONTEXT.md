@@ -29,6 +29,17 @@
 }
 ```
 
+### 用户配置 (Profile)
+```typescript
+{
+  accountName: string        // 账号名，最多 20 字
+  reminderDueOn: boolean     // 到期提醒开关
+  reminderPomodoroOn: boolean // 专注完成提醒开关
+  focusMinutes: number       // 专注时长（分钟）
+  breakMinutes: number       // 休息时长（分钟）
+}
+```
+
 ### 状态流转
 ```
 scheduled (已设提醒) → due (待回看) → processed/archived
@@ -49,12 +60,19 @@ scheduled (已设提醒) → due (待回看) → processed/archived
 
 ### 锁屏计时问题修复 (2026-03-17)
 - **现象**: 手机锁屏后，专注时长停止增加
-- **根因**: 浏览器后台暂停 JavaScript 计时器
-- **解决**: 使用基于时间戳的计算替代 setInterval
-  - 使用 `Date.now()` 计算实际经过时间
-  - `requestAnimationFrame` 替代 `setInterval`
-  - `Page Visibility API` 处理页面可见性变化
+- **根因**: 浏览器后台会暂停或延迟计时器，导致按 tick 累加不稳定
+- **解决**: 使用会话起点 + 真实经过时间计算剩余时间
+  - 用 `Date.now()` 计算实际经过时间
+  - 在前台恢复时重新按时间戳刷新界面
+  - 计时显示统一取整，避免浮点数显示异常
 - **涉及**: `demo/src/pages/HomePage.jsx:21-77`
+
+### 用户设置与系统通知 (2026-03-17)
+- **账号名**: 支持在「我的」页编辑，限制 20 字，持久化到 `profile.accountName`
+- **学习偏好**: 支持设置专注时长、休息时长，并持久化到 `profile.focusMinutes` / `profile.breakMinutes`
+- **提醒设置**: 支持「到期提醒」和「专注完成提醒」开关，开启后在浏览器通知权限允许时发送系统通知
+- **存储**: `demo/src/services/storage.js` 统一管理 `profile` 兼容迁移，旧数据会自动补齐默认配置
+- **涉及**: `demo/src/pages/ProfilePage.jsx`, `demo/src/pages/HomePage.jsx`, `demo/src/App.jsx`, `demo/src/services/storage.js`
 
 ---
 
@@ -107,6 +125,8 @@ scheduled (已设提醒) → due (待回看) → processed/archived
 1. **数据存储**: 所有数据存储在浏览器 localStorage，清除浏览器数据会丢失
 2. **计时器**: 已修复锁屏问题，但仍建议保持页面在前台以获得最佳体验
 3. **提醒检查**: 每10秒检查一次到期提醒，精确到秒级
+4. **通知权限**: 到期提醒/专注完成提醒依赖浏览器 Notification 权限，首次使用可能需要用户授权
+5. **时间配置**: 当前番茄钟时长来自 `profile.focusMinutes`，休息时长来自 `profile.breakMinutes`
 
 ---
 
