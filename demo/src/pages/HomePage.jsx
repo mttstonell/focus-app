@@ -5,6 +5,7 @@ export default function HomePage({
   notes,
   currentTask,
   setCurrentTask,
+  onTaskNameChange,
   onOpenQuickNote,
   dueCount,
   onTabChange,
@@ -129,7 +130,11 @@ export default function HomePage({
 
   const saveTaskName = () => {
     const name = editingValue.trim() || currentTask.name || '当前任务'
-    setCurrentTask((prev) => ({ ...prev, name }))
+    if (onTaskNameChange && name !== currentTask.name) {
+      onTaskNameChange(name)
+    } else {
+      setCurrentTask((prev) => ({ ...prev, name }))
+    }
     setEditingTaskName(false)
   }
 

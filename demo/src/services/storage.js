@@ -42,6 +42,9 @@ function normalizeNote(note, fallbackTaskName) {
 }
 
 function normalizeTask(task, fallbackTask) {
+  const id =
+    task && typeof task.id === 'string' && task.id.trim() ? task.id.trim() : (fallbackTask?.id || `t_${Date.now()}`)
+
   const name =
     task && typeof task.name === 'string' && task.name.trim() ? task.name.trim() : fallbackTask.name
 
@@ -50,7 +53,12 @@ function normalizeTask(task, fallbackTask) {
       ? Math.floor(task.focusedSeconds)
       : fallbackTask.focusedSeconds
 
-  return { name, focusedSeconds }
+  const startTime =
+    task && typeof task.startTime === 'string' && task.startTime.trim() ? task.startTime.trim() : (fallbackTask?.startTime || new Date().toISOString())
+
+  const result = { id, name, focusedSeconds, startTime }
+  if (task && task.endTime) result.endTime = task.endTime
+  return result
 }
 
 export const FOCUS_MINUTES_OPTIONS = [15, 25, 30, 45]
@@ -86,15 +94,19 @@ function normalizeProfile(raw) {
   }
 }
 
-function migrateState(rawState, defaults) {
+export function migrateState(rawState, defaults) {
   const safeTask = normalizeTask(rawState.currentTask, defaults.defaultTask)
   const rawNotes = Array.isArray(rawState.notes) ? rawState.notes : []
   const migratedNotes = rawNotes.map((note) => normalizeNote(note, safeTask.name)).filter(Boolean)
   const profile = normalizeProfile(rawState.profile)
 
+  const rawTasks = Array.isArray(rawState.tasks) ? rawState.tasks : []
+  const migratedTasks = rawTasks.map((t) => normalizeTask(t, defaults.defaultTask)).filter(Boolean)
+
   return {
     version: SCHEMA_VERSION,
     notes: migratedNotes.length > 0 ? migratedNotes : defaults.defaultNotes,
+    tasks: migratedTasks,
     currentTask: safeTask,
     profile,
   }
@@ -133,6 +145,7 @@ export function loadAppState(defaults) {
       error,
       state: {
         notes: defaults.defaultNotes,
+        tasks: [],
         currentTask: defaults.defaultTask,
         profile: DEFAULT_PROFILE,
         version: SCHEMA_VERSION,
@@ -142,11 +155,12 @@ export function loadAppState(defaults) {
   }
 }
 
-export function saveAppState({ notes, currentTask, profile }) {
+export function saveAppState({ notes, tasks, currentTask, profile }) {
   try {
     const payload = {
       version: SCHEMA_VERSION,
       notes,
+      tasks: Array.isArray(tasks) ? tasks : [],
       currentTask,
       profile: normalizeProfile(profile || DEFAULT_PROFILE),
       updatedAt: new Date().toISOString(),

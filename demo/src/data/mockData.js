@@ -58,12 +58,16 @@ export const INITIAL_NOTES = [
 ]
 
 export const INITIAL_TASK = {
+  id: `t_${now}`,
   name: '高数复习',
   focusedSeconds: 47 * 60 + 23,
+  startTime: new Date(now - (47 * 60 + 23) * 1000).toISOString(),
 }
 
 /** 空白启动时的默认任务（无演示数据） */
 export const EMPTY_DEFAULT_TASK = {
+  id: `t_${now}`,
   name: '当前任务',
   focusedSeconds: 0,
+  startTime: new Date(now).toISOString(),
 }

@@ -34,12 +34,15 @@ npm run dev
 
 ## 部署
 
-`demo` 目录已包含 `vercel.json` 和 `netlify.toml`。推荐先使用 Vercel：
+当前项目的主部署平台为 **Netlify**，`demo` 目录已包含 `netlify.toml`。
 
-1. 将仓库导入 Vercel
-2. Root Directory 设置为 `demo`
-3. Build Command 使用 `npm run build`
-4. Output Directory 使用 `dist`
+如果需要在 Netlify 部署：
+1. 将仓库关联到 Netlify
+2. Base directory (如果有选项) 设置为 `demo` 或直接根据 `netlify.toml` 自动识别
+3. Build command 默认为 `npm run build`
+4. Publish directory 为 `dist`
+
+另外也支持在 Vercel 或 Cloudflare Pages 部署。
 
 ## iOS
 

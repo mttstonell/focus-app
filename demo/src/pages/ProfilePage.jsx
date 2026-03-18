@@ -21,17 +21,20 @@ const SETTINGS = [
   {
     section: '数据',
     items: [
-      { label: '导出记录', sub: '导出为 CSV 文件', arrow: true },
-      { label: '清空记录', sub: '删除所有念头，保留当前任务名', danger: true, arrow: true },
+      { label: '导出记录 (CSV)', sub: '导出念头为 CSV 文件', arrow: true, action: 'exportCsv' },
+      { label: '导出备份 (JSON)', sub: '导出完整数据，用于跨设备迁移', arrow: true, action: 'exportJson' },
+      { label: '导入备份 (JSON)', sub: '从 JSON 文件恢复数据', arrow: true, action: 'importJson' },
+      { label: '清空记录', sub: '删除所有念头，保留当前任务名', danger: true, arrow: true, action: 'reset' },
     ],
   },
 ]
 
-export default function ProfilePage({ profile, setProfile, onReset, onExport, onLoadDemo }) {
+export default function ProfilePage({ profile, setProfile, tasks, onReset, onExportCsv, onExportJson, onImportJson, onLoadDemo }) {
   const [editingName, setEditingName] = useState(false)
   const [editValue, setEditValue] = useState(profile?.accountName ?? '专注学习中')
   const [durationPicker, setDurationPicker] = useState(null) // 'focusMinutes' | 'breakMinutes' | null
   const inputRef = useRef(null)
+  const fileInputRef = useRef(null)
   const accountName = (profile?.accountName || '专注学习中').slice(0, ACCOUNT_NAME_MAX)
 
   useEffect(() => {
@@ -188,8 +191,10 @@ export default function ProfilePage({ profile, setProfile, onReset, onExport, on
                   onClick={() => {
                     if (item.toggle && item.key) handleToggle(item.key)
                     if (item.durationKey) setDurationPicker(item.durationKey)
-                    if (item.label === '导出记录') onExport?.()
-                    if (item.danger) onReset?.()
+                    if (item.action === 'exportCsv') onExportCsv?.()
+                    if (item.action === 'exportJson') onExportJson?.()
+                    if (item.action === 'importJson') fileInputRef.current?.click()
+                    if (item.action === 'reset') onReset?.()
                   }}
                 >
                   <div style={{ flex: 1 }}>
@@ -305,7 +310,72 @@ export default function ProfilePage({ profile, setProfile, onReset, onExport, on
         </div>
       )}
 
+      {/* History Tasks */}
+      <div style={{ margin: '0 16px 16px' }}>
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#9CA3AF',
+            marginBottom: 8,
+            letterSpacing: 0.5,
+            paddingLeft: 4,
+          }}
+        >
+          历史任务
+        </div>
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 16,
+            overflow: 'hidden',
+            boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+            padding: tasks?.length > 0 ? 0 : '20px',
+            textAlign: tasks?.length > 0 ? 'left' : 'center',
+          }}
+        >
+          {(!tasks || tasks.length === 0) ? (
+            <div style={{ fontSize: 13, color: '#9CA3AF' }}>暂无历史任务</div>
+          ) : (
+            tasks.map((task, idx) => {
+              const start = new Date(task.startTime)
+              const end = task.endTime ? new Date(task.endTime) : null
+              const formatTime = (d) => `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+              const timeStr = end ? `${formatTime(start)} - ${formatTime(end)}` : `${formatTime(start)}`
+              
+              const sec = task.focusedSeconds || 0
+              const h = Math.floor(sec / 3600)
+              const m = Math.floor((sec % 3600) / 60)
+              const durationStr = h > 0 ? `${h}h ${m}m` : `${m} 分钟`
+
+              return (
+                <div
+                  key={task.id || idx}
+                  style={{
+                    padding: '14px 16px',
+                    borderBottom: idx < tasks.length - 1 ? '1px solid #F1F3F5' : 'none',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: 15, fontWeight: 500, color: '#1F2937' }}>{task.name}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#3D73D1' }}>{durationStr}</div>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4 }}>{timeStr}</div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
+
       {/* Actions */}
+      <input
+        type="file"
+        accept=".json,application/json"
+        style={{ display: 'none' }}
+        ref={fileInputRef}
+        onChange={onImportJson}
+      />
       <div style={{ margin: '0 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <button
           onClick={onReset}

@@ -9,7 +9,7 @@
 - **产品名称**: Focus
 - **技术栈**: React + Vite + Capacitor
 - **存储方式**: 浏览器 localStorage（本地优先）
-- **部署平台**: Vercel / Netlify / Cloudflare Pages
+- **部署平台**: Netlify (当前使用)
 - **GitHub 仓库**: https://github.com/mttstonell/focus-app
 
 ---
@@ -37,6 +37,17 @@
   reminderPomodoroOn: boolean // 专注完成提醒开关
   focusMinutes: number       // 专注时长（分钟）
   breakMinutes: number       // 休息时长（分钟）
+}
+```
+
+### 任务历史 (Task)
+```typescript
+{
+  id: string
+  name: string
+  focusedSeconds: number
+  startTime: ISOString
+  endTime?: ISOString
 }
 ```
 
@@ -74,6 +85,25 @@ scheduled (已设提醒) → due (待回看) → processed/archived
 - **存储**: `demo/src/services/storage.js` 统一管理 `profile` 兼容迁移，旧数据会自动补齐默认配置
 - **涉及**: `demo/src/pages/ProfilePage.jsx`, `demo/src/pages/HomePage.jsx`, `demo/src/App.jsx`, `demo/src/services/storage.js`
 
+### 任务历史记录 (2026-03-18)
+- **触发方式**: 在首页编辑当前任务名时，系统会把旧任务自动视为结束，并开启一个新的当前任务
+- **记录内容**: 每个任务都会保存 `startTime`、`endTime` 和累计 `focusedSeconds`
+- **展示位置**: 在「我的」页的“历史任务”区块中展示任务名、起止时间和专注时长
+- **存储**: `demo/src/services/storage.js` 新增 `tasks` 数组的持久化和迁移，确保刷新后仍可恢复历史任务
+- **涉及**: `demo/src/pages/HomePage.jsx`, `demo/src/pages/ProfilePage.jsx`, `demo/src/App.jsx`, `demo/src/data/mockData.js`, `demo/src/services/storage.js`
+
+### 手机端自动适配 (2026-03-18)
+- **现象**: 部分 iPhone / iPad 设备在浏览器里会出现电脑端的「手机外壳」模拟框
+- **原因**: 原先只按 `max-width: 430px` 判断移动端，遇到桌面模式、较宽机型或特殊缩放时容易失效
+- **解决**: 改为 `@media (max-width: 768px), (pointer: coarse)`，只要是触摸设备或常见手机宽度范围就自动切换为全屏沉浸式样式
+- **涉及**: `demo/src/index.css`
+
+### 记一下语音输入 (2026-03-18)
+- **功能**: 在「记一下」弹窗中增加语音输入入口，支持通过 Web Speech API 直接口述内容
+- **交互**: 输入框右侧增加圆形语音按钮，录音中切换为停止状态，图标样式参考微信语音输入的圆形扩音/声波样式
+- **兼容**: 依赖浏览器原生语音识别能力，不同浏览器支持度不完全一致，优先在 Chrome / Safari 等现代浏览器使用
+- **涉及**: `demo/src/components/QuickNoteSheet.jsx`
+
 ---
 
 ## 架构变更
@@ -88,7 +118,10 @@ scheduled (已设提醒) → due (待回看) → processed/archived
 
 ## 部署配置
 
-### Vercel
+### 当前平台：Netlify
+项目目前已部署至 Netlify，该平台在国内访问连通性相对较好。
+
+### 其他备选方案 (Vercel)
 - **Root Directory**: `demo`
 - **Build Command**: `npm run build`
 - **Output Directory**: `dist`
@@ -97,7 +130,7 @@ scheduled (已设提醒) → due (待回看) → processed/archived
 | 平台 | 域名示例 | 国内访问 |
 |------|---------|---------|
 | Vercel | `xxx.vercel.app` | 不稳定 |
-| Netlify | `xxx.netlify.app` | 较好 |
+| Netlify | `xxx.netlify.app` | 较好 (当前部署) |
 | Cloudflare Pages | `xxx.pages.dev` | 推荐 |
 
 ---
@@ -127,7 +160,8 @@ scheduled (已设提醒) → due (待回看) → processed/archived
 3. **提醒检查**: 每10秒检查一次到期提醒，精确到秒级
 4. **通知权限**: 到期提醒/专注完成提醒依赖浏览器 Notification 权限，首次使用可能需要用户授权
 5. **时间配置**: 当前番茄钟时长来自 `profile.focusMinutes`，休息时长来自 `profile.breakMinutes`
+6. **任务历史**: 编辑当前任务名会自动生成一条历史任务记录，历史列表在「我的」页查看
 
 ---
 
-*最后更新: 2026-03-17*
+*最后更新: 2026-03-18*

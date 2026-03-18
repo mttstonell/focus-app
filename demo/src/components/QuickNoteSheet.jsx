@@ -6,7 +6,11 @@ export default function QuickNoteSheet({ onSave, onClose, currentTask }) {
   const [selectedType, setSelectedType] = useState('random')
   const [selectedRemindIdx, setSelectedRemindIdx] = useState(0)
   const [visible, setVisible] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  
   const inputRef = useRef(null)
+  const recognitionRef = useRef(null)
+  const initialContentRef = useRef('')
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => setVisible(true))
@@ -17,7 +21,59 @@ export default function QuickNoteSheet({ onSave, onClose, currentTask }) {
     }
   }, [])
 
+  // 初始化语音识别
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition()
+      recognition.continuous = false
+      recognition.interimResults = true
+      recognition.lang = 'zh-CN'
+
+      recognition.onresult = (event) => {
+        let transcript = ''
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript
+        }
+        // 追加到开始录音前的内容后面
+        setContent(initialContentRef.current + (initialContentRef.current && transcript ? '，' : '') + transcript)
+      }
+
+      recognition.onend = () => {
+        setIsRecording(false)
+      }
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error)
+        setIsRecording(false)
+      }
+
+      recognitionRef.current = recognition
+    }
+  }, [])
+
+  const toggleRecording = () => {
+    if (!recognitionRef.current) {
+      alert('您的浏览器暂不支持语音输入（推荐使用 Chrome 或 Safari）')
+      return
+    }
+    if (isRecording) {
+      recognitionRef.current.stop()
+    } else {
+      initialContentRef.current = content
+      try {
+        recognitionRef.current.start()
+        setIsRecording(true)
+      } catch (e) {
+        console.error(e)
+      }
+    }
+  }
+
   const handleClose = () => {
+    if (isRecording && recognitionRef.current) {
+      recognitionRef.current.stop()
+    }
     setVisible(false)
     setTimeout(onClose, 260)
   }
@@ -111,37 +167,79 @@ export default function QuickNoteSheet({ onSave, onClose, currentTask }) {
         </div>
 
         {/* Textarea */}
-        <textarea
-          ref={inputRef}
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="刚才走神想到什么……（一句话就行）"
-          rows={3}
-          maxLength={320}
-          style={{
-            width: '100%',
-            padding: '13px 14px',
-            borderRadius: 16,
-            border: '1.5px solid #E5E7EB',
-            fontSize: 15,
-            color: '#1F2937',
-            resize: 'none',
-            outline: 'none',
-            fontFamily: 'inherit',
-            background: '#F7F8FA',
-            lineHeight: 1.6,
-            transition: 'border-color 0.15s',
-          }}
-          onFocus={(e) => {
-            e.target.style.borderColor = '#4C8BF5'
-            e.target.style.background = '#fff'
-          }}
-          onBlur={(e) => {
-            e.target.style.borderColor = '#E5E7EB'
-            e.target.style.background = '#F7F8FA'
-          }}
-        />
+        <div style={{ position: 'relative' }}>
+          <textarea
+            ref={inputRef}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={isRecording ? "正在聆听..." : "刚才走神想到什么……（一句话就行）"}
+            rows={3}
+            maxLength={320}
+            style={{
+              width: '100%',
+              padding: '13px 44px 13px 14px',
+              borderRadius: 16,
+              border: isRecording ? '1.5px solid #FF6B6B' : '1.5px solid #E5E7EB',
+              fontSize: 15,
+              color: '#1F2937',
+              resize: 'none',
+              outline: 'none',
+              fontFamily: 'inherit',
+              background: isRecording ? '#FFF0F0' : '#F7F8FA',
+              lineHeight: 1.6,
+              transition: 'all 0.15s',
+            }}
+            onFocus={(e) => {
+              if (!isRecording) {
+                e.target.style.borderColor = '#4C8BF5'
+                e.target.style.background = '#fff'
+              }
+            }}
+            onBlur={(e) => {
+              if (!isRecording) {
+                e.target.style.borderColor = '#E5E7EB'
+                e.target.style.background = '#F7F8FA'
+              }
+            }}
+          />
+          <button
+            onClick={(e) => {
+              e.preventDefault()
+              toggleRecording()
+            }}
+            title="语音输入"
+            style={{
+              position: 'absolute',
+              right: 12,
+              bottom: 16,
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              background: isRecording ? '#FF6B6B' : '#fff',
+              color: isRecording ? '#FFF' : '#8E929B',
+              border: isRecording ? 'none' : '1.5px solid #D1D5DB',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              boxShadow: isRecording ? '0 2px 8px rgba(255,107,107,0.4)' : '0 1px 3px rgba(0,0,0,0.05)',
+            }}
+          >
+            {isRecording ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="6" y="6" width="12" height="12" rx="2" ry="2"></rect>
+              </svg>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: '-1px' }}>
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+              </svg>
+            )}
+          </button>
+        </div>
         <div
           style={{
             marginTop: 6,

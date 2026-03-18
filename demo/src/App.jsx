@@ -8,7 +8,7 @@ import TabBar from './components/TabBar'
 import Toast from './components/Toast'
 import { EMPTY_DEFAULT_TASK, INITIAL_NOTES, INITIAL_TASK } from './data/mockData'
 import { getCurrentTime } from './constants/types'
-import { buildNotesCsv, clearAppState, loadAppState, saveAppState } from './services/storage'
+import { buildNotesCsv, clearAppState, loadAppState, saveAppState, migrateState } from './services/storage'
 
 const initialLoad = loadAppState({
   defaultNotes: [],
@@ -42,6 +42,7 @@ function showPomodoroCompleteNotification() {
 export default function App() {
   const [activeTab, setActiveTab] = useState('home')
   const [notes, setNotes] = useState(initialLoad.state.notes)
+  const [tasks, setTasks] = useState(initialLoad.state.tasks || [])
   const [currentTask, setCurrentTask] = useState(initialLoad.state.currentTask)
   const [profile, setProfile] = useState(initialLoad.state.profile || {
     accountName: '专注学习中',
@@ -83,7 +84,7 @@ export default function App() {
           return n
         })
         if (hasUpdates) {
-          const saveResult = saveAppState({ notes: nextNotes, currentTask, profile: profileRef.current })
+          const saveResult = saveAppState({ notes: nextNotes, tasks, currentTask, profile: profileRef.current })
           if (!saveResult.ok) showToastMsg('保存失败，请检查浏览器存储权限')
           if (profileRef.current?.reminderDueOn && newlyDueIds.length) {
             requestNotificationPermission().then((perm) => {
@@ -103,9 +104,9 @@ export default function App() {
   }, [currentTask])
 
   useEffect(() => {
-    const result = saveAppState({ notes, currentTask, profile })
+    const result = saveAppState({ notes, tasks, currentTask, profile })
     if (!result.ok) showToastMsg('保存失败，请检查浏览器存储权限')
-  }, [notes, currentTask, profile])
+  }, [notes, tasks, currentTask, profile])
 
   const addNote = (note) => {
     if (!note?.content || !note.content.trim()) {
@@ -122,7 +123,7 @@ export default function App() {
     const nextNotes = [newNote, ...notes]
     setNotes(nextNotes)
     // 立即写入本地存储，避免依赖 effect 时机导致未持久化
-    const saveResult = saveAppState({ notes: nextNotes, currentTask, profile })
+    const saveResult = saveAppState({ notes: nextNotes, tasks, currentTask, profile })
     if (!saveResult.ok) showToastMsg('保存失败，请检查浏览器存储权限')
     showToastMsg('已记下，先回来吧 👋')
   }
@@ -130,7 +131,7 @@ export default function App() {
   const updateNote = (id, updates) => {
     setNotes((prev) => {
       const nextNotes = prev.map((n) => (n.id === id ? { ...n, ...updates } : n))
-      const saveResult = saveAppState({ notes: nextNotes, currentTask, profile: profileRef.current })
+      const saveResult = saveAppState({ notes: nextNotes, tasks, currentTask, profile: profileRef.current })
       if (!saveResult.ok) showToastMsg('保存失败，请检查浏览器存储权限')
       return nextNotes
     })
@@ -141,7 +142,29 @@ export default function App() {
     setTimeout(() => setToast(null), 2500)
   }
 
-  const handleExport = () => {
+  const handleTaskNameChange = (newName) => {
+    if (newName === currentTask.name) return
+
+    const oldTask = {
+      ...currentTask,
+      endTime: new Date().toISOString(),
+    }
+    const nextTasks = [oldTask, ...tasks]
+    setTasks(nextTasks)
+
+    const newTask = {
+      id: `t_${Date.now()}`,
+      name: newName,
+      focusedSeconds: 0,
+      startTime: new Date().toISOString(),
+    }
+    setCurrentTask(newTask)
+    
+    const saveResult = saveAppState({ notes, tasks: nextTasks, currentTask: newTask, profile: profileRef.current })
+    if (!saveResult.ok) showToastMsg('保存失败，请检查浏览器存储权限')
+  }
+
+  const handleExportCsv = () => {
     if (notes.length === 0) {
       showToastMsg('还没有记录可导出')
       return
@@ -164,6 +187,77 @@ export default function App() {
     }
   }
 
+  const handleExportJson = () => {
+    try {
+      const data = { notes, tasks, currentTask, profile }
+      const json = JSON.stringify(data, null, 2)
+      const blob = new Blob([json], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `focus-backup-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      showToastMsg('已导出 JSON 备份')
+    } catch (_) {
+      showToastMsg('导出备份失败')
+    }
+  }
+
+  const handleImportJson = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const json = e.target.result
+        const parsed = JSON.parse(json)
+        
+        if (!parsed || typeof parsed !== 'object') throw new Error('Invalid JSON')
+        
+        const migrated = migrateState(parsed, {
+          defaultNotes: [],
+          defaultTask: EMPTY_DEFAULT_TASK,
+        })
+        
+        const nextNotes = migrated.notes || []
+        const nextTasks = migrated.tasks || []
+        const nextCurrentTask = migrated.currentTask || EMPTY_DEFAULT_TASK
+        const nextProfile = migrated.profile || {
+          accountName: '专注学习中',
+          reminderDueOn: true,
+          reminderPomodoroOn: true,
+          focusMinutes: 25,
+          breakMinutes: 5,
+        }
+
+        setNotes(nextNotes)
+        setTasks(nextTasks)
+        setCurrentTask(nextCurrentTask)
+        setProfile(nextProfile)
+        
+        const saveResult = saveAppState({
+          notes: nextNotes,
+          tasks: nextTasks,
+          currentTask: nextCurrentTask,
+          profile: nextProfile
+        })
+        
+        if (!saveResult.ok) throw new Error('Save failed')
+        
+        showToastMsg('数据导入成功！')
+      } catch (err) {
+        console.error(err)
+        showToastMsg('导入失败，文件格式不正确')
+      }
+    }
+    reader.readAsText(file)
+    event.target.value = ''
+  }
+
   const handleReset = () => {
     const ok = window.confirm('确定要清空所有记录吗？当前任务会保留名称，专注时长会清零。')
     if (!ok) return
@@ -173,6 +267,7 @@ export default function App() {
       return
     }
     setNotes([])
+    setTasks([])
     setCurrentTask((prev) => ({ ...EMPTY_DEFAULT_TASK, name: prev?.name || EMPTY_DEFAULT_TASK.name }))
     showToastMsg('已清空记录')
   }
@@ -180,6 +275,7 @@ export default function App() {
   const handleLoadDemo = () => {
     setNotes(INITIAL_NOTES)
     setCurrentTask(INITIAL_TASK)
+    setTasks([])
     showToastMsg('已加载演示数据')
   }
 
@@ -208,6 +304,7 @@ export default function App() {
               notes={notes}
               currentTask={currentTask}
               setCurrentTask={setCurrentTask}
+              onTaskNameChange={handleTaskNameChange}
               onOpenQuickNote={() => setShowQuickNote(true)}
               dueCount={dueCount}
               onTabChange={setActiveTab}
@@ -225,8 +322,11 @@ export default function App() {
             <ProfilePage
               profile={profile}
               setProfile={setProfile}
+              tasks={tasks}
               onReset={handleReset}
-              onExport={handleExport}
+              onExportCsv={handleExportCsv}
+              onExportJson={handleExportJson}
+              onImportJson={handleImportJson}
               onLoadDemo={handleLoadDemo}
             />
           )}
